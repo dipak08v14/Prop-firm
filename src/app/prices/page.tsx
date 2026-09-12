@@ -8,7 +8,7 @@ type PriceRow = {
   bid: number;
   ask: number;
   updated_at: string;
-  is_stale?: boolean;
+  market_state?: 'open' | 'stale' | 'closed';
 };
 
 export default function PricesPage() {
@@ -84,8 +84,12 @@ export default function PricesPage() {
                   {new Date(price.updated_at).toLocaleTimeString([], { hour12: false })}
                 </td>
                 <td className="p-4 text-center">
-                  {price.is_stale ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  {price.market_state === 'stale' ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      Stale — check feed
+                    </span>
+                  ) : price.market_state === 'closed' ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                       Market closed
                     </span>
                   ) : (
