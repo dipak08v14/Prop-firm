@@ -1,13 +1,16 @@
 import os
 import time
 import sys
+import threading
+import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import MetaTrader5 as mt5
 
 # Load environment variables
-load_dotenv()
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(env_path)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -33,6 +36,46 @@ def get_active_instruments():
         print(f"Failed to fetch active instruments: {e}")
         return None
 
+def upsert_candles_async(supabase_client, updates, symbol, count, newest_time):
+    try:
+        supabase_client.table('candles_1m').upsert(updates, on_conflict='symbol,opened_at').execute()
+        print(f"[{symbol}] Wrote {count} candles. Newest: {newest_time} UTC")
+    except Exception as e:
+        print(f"[{symbol}] Failed to upsert candles: {e}")
+
+def fetch_and_upsert_candles(supabase_client, broker_symbol, symbol, count, async_mode=False):
+    # 1 means start from the last completed bar (skip index 0 which is currently forming)
+    rates = mt5.copy_rates_from_pos(broker_symbol, mt5.TIMEFRAME_M1, 1, count)
+    if rates is None or len(rates) == 0:
+        print(f"[{symbol}] No candles fetched.")
+        return
+
+    updates = []
+    for r in rates:
+        opened_at = datetime.fromtimestamp(r['time'], tz=timezone.utc).isoformat()
+        updates.append({
+            "symbol": symbol,
+            "open": float(r['open']),
+            "high": float(r['high']),
+            "low": float(r['low']),
+            "close": float(r['close']),
+            "volume": int(r['tick_volume']),
+            "opened_at": opened_at
+        })
+        
+    newest_time = updates[-1]['opened_at']
+    
+    if async_mode:
+        t = threading.Thread(target=upsert_candles_async, args=(supabase_client, updates, symbol, len(updates), newest_time))
+        t.daemon = True
+        t.start()
+    else:
+        try:
+            supabase_client.table('candles_1m').upsert(updates, on_conflict='symbol,opened_at').execute()
+            print(f"Startup: [{symbol}] Wrote {len(updates)} candles. Newest: {newest_time} UTC")
+        except Exception as e:
+            print(f"Startup: [{symbol}] Failed to upsert candles: {e}")
+
 def main():
     print("Starting Price Worker...")
 
@@ -55,11 +98,26 @@ def main():
     if not instruments:
         print("No active instruments found in DB.")
         
+    print("Fetching 1000 historical 1m candles for active instruments...")
+    for inst in instruments:
+        fetch_and_upsert_candles(supabase, inst['broker_symbol'], inst['symbol'], 1000, async_mode=False)
+        
+    last_candle_fetch = time.time()
+
     try:
         while True:
+            current_time = time.time()
+            
+            # Fetch 3 completed candles every 60 seconds async so it doesn't block
+            if current_time - last_candle_fetch >= 60:
+                last_candle_fetch = current_time
+                for inst in instruments:
+                    fetch_and_upsert_candles(supabase, inst['broker_symbol'], inst['symbol'], 3, async_mode=True)
+            
             print(f"--- Price Update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} ---")
             
             updates = []
+            broadcast_payload = []
             
             for inst in instruments:
                 symbol = inst['symbol']               # e.g. BTCUSD
@@ -78,7 +136,6 @@ def main():
                 tick = mt5.symbol_info_tick(broker_symbol)
                 if tick is None:
                     print(f"{broker_symbol}: Failed to retrieve tick")
-                    # If tick fails, MT5 might be disconnected, but we let it loop and handle errors
                     continue
                     
                 now_utc = datetime.now(timezone.utc)
@@ -98,15 +155,38 @@ def main():
                     "ask": tick.ask,
                     "updated_at": tick_time.isoformat()
                 })
+                
+                broadcast_payload.append({
+                    "symbol": symbol,
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "updated_at": tick_time.isoformat(),
+                    "is_stale": is_stale
+                })
             
             if updates:
                 try:
                     # Upsert to latest_prices
                     supabase.table('latest_prices').upsert(updates, on_conflict='symbol').execute()
+                    
+                    # Broadcast via REST API
+                    broadcast_data = {
+                        "messages": [
+                            {
+                                "topic": "realtime:prices",
+                                "event": "tick",
+                                "payload": broadcast_payload
+                            }
+                        ]
+                    }
+                    headers = {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    requests.post(f"{SUPABASE_URL}/realtime/v1/api/broadcast", json=broadcast_data, headers=headers, timeout=5)
                 except Exception as e:
-                    print(f"Failed to upsert prices to Supabase: {e}")
-                    # If the connection failed completely, wait and retry
-                    time.sleep(5)
+                    print(f"Failed to upsert or broadcast prices: {e}")
             
             print("-" * 75)
             time.sleep(2)
