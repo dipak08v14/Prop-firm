@@ -37,7 +37,7 @@ export default function PricesPage() {
     channel
       .on('broadcast', { event: 'tick' }, (payload) => {
         const newPrices: Record<string, PriceRow> = {};
-        payload.payload.forEach((row: PriceRow) => {
+        payload.payload.prices.forEach((row: PriceRow) => {
           newPrices[row.symbol] = row;
         });
         setPrices(prev => ({ ...prev, ...newPrices }));

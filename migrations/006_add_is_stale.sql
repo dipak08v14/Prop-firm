@@ -1,0 +1,2 @@
+ALTER TABLE public.latest_prices
+ADD COLUMN IF NOT EXISTS is_stale BOOLEAN NOT NULL DEFAULT false;

@@ -153,7 +153,8 @@ def main():
                     "symbol": symbol,
                     "bid": tick.bid,
                     "ask": tick.ask,
-                    "updated_at": tick_time.isoformat()
+                    "updated_at": tick_time.isoformat(),
+                    "is_stale": is_stale
                 })
                 
                 broadcast_payload.append({
@@ -175,7 +176,7 @@ def main():
                             {
                                 "topic": "realtime:prices",
                                 "event": "tick",
-                                "payload": broadcast_payload
+                                "payload": { "prices": broadcast_payload }
                             }
                         ]
                     }
@@ -184,7 +185,9 @@ def main():
                         "Authorization": f"Bearer {SUPABASE_KEY}",
                         "Content-Type": "application/json"
                     }
-                    requests.post(f"{SUPABASE_URL}/realtime/v1/api/broadcast", json=broadcast_data, headers=headers, timeout=5)
+                    res = requests.post(f"{SUPABASE_URL}/realtime/v1/api/broadcast", json=broadcast_data, headers=headers, timeout=5)
+                    if not res.ok:
+                        print(f"Broadcast HTTP {res.status_code}: {res.text}")
                 except Exception as e:
                     print(f"Failed to upsert or broadcast prices: {e}")
             
