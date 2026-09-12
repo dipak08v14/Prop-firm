@@ -174,7 +174,7 @@ def main():
                     broadcast_data = {
                         "messages": [
                             {
-                                "topic": "realtime:prices",
+                                "topic": "prices",
                                 "event": "tick",
                                 "payload": { "prices": broadcast_payload }
                             }
