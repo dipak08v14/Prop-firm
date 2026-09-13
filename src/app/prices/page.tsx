@@ -59,14 +59,14 @@ export default function PricesPage() {
         <h1 className="text-2xl font-bold">Live Prices</h1>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${status === 'connected' ? 'bg-green-500' : status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-          <span className="text-sm font-medium text-gray-600 capitalize">{status}</span>
+          <span className="text-sm font-medium text-white capitalize">{status}</span>
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
+      <div className="overflow-x-auto bg-white text-black rounded-lg shadow border border-gray-200">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-600">
+            <tr className="bg-gray-50 border-b border-gray-200 text-sm font-semibold text-black">
               <th className="p-4">Symbol</th>
               <th className="p-4 text-right">Bid</th>
               <th className="p-4 text-right">Ask</th>
@@ -77,10 +77,10 @@ export default function PricesPage() {
           <tbody className="divide-y divide-gray-200">
             {Object.values(prices).sort((a, b) => a.symbol.localeCompare(b.symbol)).map((price) => (
               <tr key={price.symbol} className="hover:bg-gray-50">
-                <td className="p-4 font-medium text-gray-900">{price.symbol}</td>
+                <td className="p-4 font-medium text-black">{price.symbol}</td>
                 <td className="p-4 text-right font-mono">{price.bid}</td>
                 <td className="p-4 text-right font-mono">{price.ask}</td>
-                <td className="p-4 text-right text-gray-500 text-sm">
+                <td className="p-4 text-right text-black text-sm">
                   {new Date(price.updated_at).toLocaleTimeString([], { hour12: false })}
                 </td>
                 <td className="p-4 text-center">
@@ -89,7 +89,7 @@ export default function PricesPage() {
                       Stale — check feed
                     </span>
                   ) : price.market_state === 'closed' ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-black">
                       Market closed
                     </span>
                   ) : (
@@ -102,7 +102,7 @@ export default function PricesPage() {
             ))}
             {Object.keys(prices).length === 0 && (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-gray-500">
+                <td colSpan={5} className="p-8 text-center text-black">
                   Loading prices...
                 </td>
               </tr>

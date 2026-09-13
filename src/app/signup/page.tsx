@@ -61,7 +61,7 @@ export default function SignupPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="bg-white p-8 rounded shadow max-w-md w-full text-center">
           <h2 className="text-2xl font-bold mb-4">Registration Successful</h2>
-          <p className="text-gray-600">Please check your email to verify your account.</p>
+          <p className="text-black">Please check your email to verify your account.</p>
         </div>
       </div>
     );

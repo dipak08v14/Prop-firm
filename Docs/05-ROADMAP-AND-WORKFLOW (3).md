@@ -15,7 +15,7 @@ Each step ships and works before the next begins. No parallel half-finished feat
 - [~] Auth: email + 18+ confirmation at signup — **Google sign-in NOT built**
 - [~] Seed `instruments` (5 rows, done) and `account_templates` (**not seeded** — deferred to Phase 2 when rules are decided)
 
-### PHASE 1 — Price pipeline ⚠️ MOSTLY COMPLETE
+### PHASE 1 — Price pipeline ✅ COMPLETE (two optional items open)
 - [x] Broker demo account opened at Exness, all 5 symbols confirmed (`m` suffix: BTCUSDm etc.)
 - [x] MT5 installed at `C:\Program Files\Five Percent Online MetaTrader 5`, separate from the real-account terminal
 - [x] Python worker reading all 5 instruments via the `MetaTrader5` package
@@ -24,10 +24,12 @@ Each step ships and works before the next begins. No parallel half-finished feat
 - [x] 1-minute candle persistence to Postgres (1000-bar backfill + 60s sync)
 - [x] **Extra, not originally planned:** `pg_cron` job pruning candles older than 90 days, daily at 03:00 UTC
 - [x] **Extra, not originally planned:** `is_stale` column on `latest_prices` so staleness survives without a broadcast
+- [x] **Market-hours awareness** — `trades_247` and `weekly_close_utc` columns on `instruments`, config-driven not hardcoded. Gold window set to 20:50 Fri → 22:10 Sun UTC, deliberately wider than observed (20:57 / 22:01) so no tickless period is ever treated as a fault. **Re-verify after each US DST change.**
+- [x] **Three price states** — `market_state` column on `latest_prices`: `open` / `stale` / `closed`. Only `stale` is a fault. Verified: gold prints `[CLOSED]`, never `[STALE]`.
+- [x] **Telegram alerting** — `worker/alerts.py`, 15-minute de-duplication, alerts on worker start/stop, MT5 lost/restored, price fault, fault cleared. Never alerts on a closed market. Test command: `python worker\price_worker.py --test-alert`
+- [x] Console price display formatted to each instrument's `price_precision`
 - [~] Auto-reconnect on MT5 disconnect — **code written but never tested**; no watchdog auto-restart yet
-- [ ] Telegram alert if any price goes stale beyond 30 seconds
-- [ ] **Market-hours awareness** — gold closes Fri evening to Sun evening. Without this, a 30-second stale alarm fires continuously all weekend. Must know trading hours per instrument before alerting is built.
-- [~] Stale-feed handling — `is_stale` flag works and the UI shows "Market closed". Still to build: block orders, freeze equity, never breach on stale data (blocked until orders exist in Phase 2)
+- [~] Stale-feed handling — status flags and UI done. Still to build: block orders, freeze equity, never breach on stale data (blocked until orders exist in Phase 2)
 - [ ] Second broker demo account opened as standby
 
 ### PHASE 2 — Execution engine
@@ -151,6 +153,8 @@ The purpose of writing these down now is that the version of you reading them in
 6. Spread review — SOL spread is ~0.6% and XRP ~0.73% versus BTC at 0.013%. On a 5% daily drawdown limit, a few round trips on those pairs breach the account on cost alone. Revisit when setting the ruleset.
 7. Project sits in a OneDrive folder with a space in the path (`...\OneDrive\Documents\GitHub\Prop firm`). Has already caused one npm failure and one corrupted `.next` cache. Moving to `C:\dev\prop-firm` would remove a recurring class of build problems.
 8. Google sign-in not built — email/password only
+9. Telegram bot token has been exposed in chat logs and screenshots — **revoke and replace via BotFather**
+10. Gold's weekly window needs re-verifying after each US daylight saving change (its close shifts by one hour)
 
 ---
 
@@ -174,4 +178,10 @@ Price pipeline end to end: MT5 → Python worker → Supabase → browser. Live 
 - `.next` cache corrupted twice, both times inside the OneDrive path. Fix each time: stop dev server, delete `.next`, restart.
 - Tested the deployed Vercel site instead of localhost once, and concluded a fix hadn't worked when it simply hadn't been pushed. Test locally, push after.
 
-**Ended at:** Phase 1 mostly complete. Next session starts with the remaining Phase 1 items above, then Phase 2 — the execution engine.
+**Market hours and alerting.** Found that the MT5 Python wrapper does not expose session schedules at all — `symbol_info_session_trade` and `symbol_info_session_quote` exist in MQL5 but were omitted from the Python package, and `session_open`/`session_close` on `symbol_info` are prices, not times. Confirmed separately that `tick.time` from the Python wrapper is already UTC with zero broker offset, which removes a whole class of timezone bugs.
+
+Solved it as database config rather than hardcoded Python: `trades_247` and `weekly_close_utc` on `instruments`. Gold's window was set from observed data, not assumption — queried `candles_1m` and found the last bar before the gap at 20:57 and the first after at 22:01, consistent across two weekends (4 Sep and 11 Sep). Configured 20:50 → 22:10, deliberately wider on both sides so no tickless period is ever labelled a fault. Costs about nine minutes of Sunday where prices flow but the instrument reads closed — the safe direction to err.
+
+Telegram alerting built on top, with 15-minute de-duplication so one fault doesn't send hundreds of messages.
+
+**Ended at:** Phase 1 complete. Next session starts with Phase 2 — the execution engine.
